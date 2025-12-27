@@ -1,5 +1,5 @@
 // ============== CONFIG ==================
-const DOMAIN = "vlesao.pages.dev" // GANTI sesuai nama worker
+const DOMAIN = "vless-2rj.workers.dev" // GANTI sesuai nama worker
 const PATH = "/assets/js/app.js"
 
 const VMESS_USERS = [
