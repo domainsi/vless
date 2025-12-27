@@ -1,80 +1,88 @@
-// ================= CONFIG =================
-const UUIDS = [
-  "2ebc4824-a9a2-4edf-bb7b-abd9c4ff54cf",
-  "be3d3347-e098-47c2-a3e4-52cdcb1887a5"
+// ============== CONFIG ==================
+const DOMAIN = "vlesao.pages.dev" // GANTI sesuai nama worker
+const PATH = "/assets/js/app.js"
+
+const VMESS_USERS = [
+  {
+    name: "VMESS-1",
+    uuid: "be3d3347-e098-47c2-a3e4-52cdcb1887a5"
+  },
+  {
+    name: "VMESS-2",
+    uuid: "2ebc4824-a9a2-4edf-bb7b-abd9c4ff54cf"
+  }
 ]
-
-const SECRET = "X-EDGE-AUTH"
-const SECRET_VALUE = "my-secret-key-123"
-
-const PATHS = [
-  "/assets/js/app.js",
-  "/cdn/v1/data",
-  "/images/load"
-]
-
-// rate limit (per request, basic)
-const MAX_FRAME = 1000
-// =========================================
+// ========================================
 
 export default {
-  async fetch(req, env, ctx) {
-    const url = new URL(req.url)
-
-    // ❌ bukan websocket → kasih fake web
-    if (req.headers.get("Upgrade") !== "websocket") {
-      return fakeSite()
+  async fetch(req) {
+    // kalau websocket → relay (proxy mode)
+    if (req.headers.get("Upgrade") === "websocket") {
+      const pair = new WebSocketPair()
+      const [client, server] = Object.values(pair)
+      server.accept()
+      relay(server)
+      return new Response(null, { status: 101, webSocket: client })
     }
 
-    // ❌ path tidak valid
-    if (!PATHS.includes(url.pathname)) {
-      return new Response("404", { status: 404 })
-    }
-
-    // ❌ header auth salah
-    if (req.headers.get(SECRET) !== SECRET_VALUE) {
-      return new Response("Forbidden", { status: 403 })
-    }
-
-    const pair = new WebSocketPair()
-    const [client, server] = Object.values(pair)
-    server.accept()
-
-    handleVLESS(server)
-
-    return new Response(null, {
-      status: 101,
-      webSocket: client
-    })
+    // kalau browser → tampilkan halaman VMESS
+    return vmessPage()
   }
 }
 
-function handleVLESS(ws) {
-  let count = 0
-
-  ws.addEventListener("message", (event) => {
-    count++
-    if (count > MAX_FRAME) {
-      ws.close()
-      return
-    }
-    ws.send(event.data)
-  })
+function relay(ws) {
+  ws.addEventListener("message", e => ws.send(e.data))
 }
 
-function fakeSite() {
+// ================= HTML PAGE =================
+function vmessPage() {
+  const links = VMESS_USERS.map(u => {
+    const json = {
+      v: "2",
+      ps: u.name,
+      add: DOMAIN,
+      port: "443",
+      id: u.uuid,
+      aid: "0",
+      net: "ws",
+      type: "none",
+      host: DOMAIN,
+      path: PATH,
+      tls: "tls"
+    }
+    const vmess = "vmess://" + btoa(JSON.stringify(json))
+    return `<li><b>${u.name}</b><br>
+      <input value="${vmess}" readonly onclick="this.select()">
+    </li>`
+  }).join("")
+
   return new Response(`
 <!doctype html>
 <html>
 <head>
-<title>Welcome</title>
+<meta charset="utf-8">
+<title>VMESS CONFIG</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body{font-family:sans-serif;background:#111;color:#eee;text-align:center;padding-top:20%}
+body{background:#0d0d0d;color:#eee;font-family:Arial;padding:20px}
+h1{color:#00ffcc}
+li{margin-bottom:15px}
+input{
+  width:100%;
+  background:#111;
+  color:#0f0;
+  border:1px solid #333;
+  padding:8px;
+}
+small{color:#888}
 </style>
 </head>
 <body>
-<h1>Welcome</h1>
-<p>Service is running normally.</p>
+<h1>🚀 VMESS CONFIG</h1>
+<p>Klik lalu copy link di bawah</p>
+<ul>${links}</ul>
+<hr>
+<small>Cloudflare Workers · TLS · WS</small>
 </body>
 </html>
 `, {
